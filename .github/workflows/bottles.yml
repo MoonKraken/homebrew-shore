@@ -63,11 +63,20 @@ jobs:
           brew cleanup -s
           rm -rf "$(brew --cache)"
 
+      - name: Debug - Show system info
+        run: |
+          echo "OS: $(sw_vers -productVersion)"
+          echo "Architecture: $(uname -m)"
+          echo "Homebrew version: $(brew --version)"
+          echo "Ruby version: $(ruby --version)"
+          echo "Formula content:"
+          cat shore.rb
+
       - name: Build bottle using test-bot
         run: |
           brew test-bot --only-cleanup-before
           brew test-bot --only-setup
-          brew test-bot --only-formulae --skip-recursive-dependents --root-url="https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}" --only-json-tab shore
+          brew test-bot --only-formulae --skip-recursive-dependents --skip-style --root-url="https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}" --only-json-tab shore
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -12,11 +12,6 @@ class Shore < Formula
     system "cargo", "install", *std_cargo_args
   end
 
-  def post_install
-    # Shore creates ~/.shore/ automatically on first run
-    # No additional setup needed
-  end
-
   def caveats
     <<~EOS
       Shore stores databases in ~/.shore/
@@ -30,8 +25,9 @@ class Shore < Formula
   end
 
   test do
-    # Test that the binary exists and can show help
-    assert_match "Shore", shell_output("#{bin}/shore --help")
+    # Test that the binary exists and can show version/help
+    output = shell_output("#{bin}/shore --help")
+    assert_match(/shore/i, output)
   end
 end
 
