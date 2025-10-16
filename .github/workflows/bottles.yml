@@ -76,7 +76,7 @@ jobs:
         run: |
           brew test-bot --only-cleanup-before
           brew test-bot --only-setup
-          brew test-bot --only-formulae --skip-recursive-dependents --skip-style --root-url="https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}" --only-json-tab shore
+          brew test-bot --only-formulae --skip-recursive-dependents --root-url="https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}" --only-json-tab shore
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
