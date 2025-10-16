@@ -7,11 +7,6 @@ on:
         description: 'Git tag from source repo (e.g., v0.1.0)'
         required: true
         type: string
-      formula:
-        description: 'Formula to build'
-        required: false
-        default: 'shore'
-        type: string
 
 env:
   HOMEBREW_NO_INSTALL_FROM_API: 1
@@ -51,17 +46,17 @@ jobs:
           TAG="${{ github.event.inputs.tag }}"
           
           # Update URL to point to the specified tag
-          sed -i '' "s|url \".*\"|url \"https://github.com/MoonKraken/shore/archive/refs/tags/${TAG}.tar.gz\"|" ${{ github.event.inputs.formula }}.rb
+          sed -i '' "s|url \".*\"|url \"https://github.com/MoonKraken/shore/archive/refs/tags/${TAG}.tar.gz\"|" shore.rb
           
           # Download and calculate sha256
           curl -L -o /tmp/source.tar.gz "https://github.com/MoonKraken/shore/archive/refs/tags/${TAG}.tar.gz"
           SHA256=$(shasum -a 256 /tmp/source.tar.gz | awk '{print $1}')
           
           # Update sha256
-          sed -i '' "s|sha256 \".*\"|sha256 \"${SHA256}\"|" ${{ github.event.inputs.formula }}.rb
+          sed -i '' "s|sha256 \".*\"|sha256 \"${SHA256}\"|" shore.rb
           
           echo "Updated formula:"
-          cat ${{ github.event.inputs.formula }}.rb
+          cat shore.rb
 
       - name: Clean Homebrew cache
         run: |
@@ -72,7 +67,7 @@ jobs:
         run: |
           brew test-bot --only-cleanup-before
           brew test-bot --only-setup
-          brew test-bot --only-formulae --skip-recursive-dependents --root-url="https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}" --only-json-tab ${{ github.event.inputs.formula }}
+          brew test-bot --only-formulae --skip-recursive-dependents --root-url="https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}" --only-json-tab shore
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -116,14 +111,11 @@ jobs:
             echo "Merged bottle JSON:"
             cat merged.bottle.json
             
-            # Extract and format bottle block
-            FORMULA="${{ github.event.inputs.formula }}"
-            
             # Build bottle block from JSON
             echo "  bottle do" > bottle_block.txt
             echo "    root_url \"https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}\"" >> bottle_block.txt
             
-            jq -r ".\"${FORMULA}\".bottle.tags | to_entries[] | \"    sha256 cellar: :any_skip_relocation, \" + .key + \": \\\"\" + .value.sha256 + \"\\\"\"" merged.bottle.json >> bottle_block.txt
+            jq -r '.shore.bottle.tags | to_entries[] | "    sha256 cellar: :any_skip_relocation, " + .key + ": \"" + .value.sha256 + "\""' merged.bottle.json >> bottle_block.txt
             
             echo "  end" >> bottle_block.txt
             
@@ -141,12 +133,12 @@ jobs:
                 next
               }
               { print }
-            ' ${FORMULA}.rb > ${FORMULA}.rb.tmp
+            ' shore.rb > shore.rb.tmp
             
-            mv ${FORMULA}.rb.tmp ${FORMULA}.rb
+            mv shore.rb.tmp shore.rb
             
             echo "Updated formula:"
-            cat ${FORMULA}.rb
+            cat shore.rb
           else
             echo "No bottle JSON files found!"
             exit 1
@@ -156,7 +148,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ${{ github.event.inputs.formula }}.rb
+          git add shore.rb
           git commit -m "Add bottles for ${{ github.event.inputs.tag }}"
           git push
 
