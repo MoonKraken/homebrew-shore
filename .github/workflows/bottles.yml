@@ -1,27 +1,27 @@
-name: Build Homebrew Bottles
+name: Build and Publish Bottles
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to build bottles for (e.g., 0.1.0)'
+      tag:
+        description: 'Git tag from source repo (e.g., v0.1.0)'
         required: true
         type: string
-      tag:
-        description: 'Git tag for the release (e.g., v0.1.0)'
-        required: true
+      formula:
+        description: 'Formula to build'
+        required: false
+        default: 'shore'
         type: string
 
 env:
-  FORMULA_NAME: shore
-  SOURCE_REPO: MoonKraken/shore
+  HOMEBREW_NO_INSTALL_FROM_API: 1
 
 jobs:
   build-bottles:
     strategy:
       matrix:
         os:
-          - macos-13      # Ventura
+          - macos-13      # Ventura (Intel)
           - macos-14      # Sonoma (Apple Silicon)
           - macos-15      # Sequoia
     runs-on: ${{ matrix.os }}
@@ -34,127 +34,129 @@ jobs:
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
 
-      - name: Update formula URL and version
+      - name: Cache Homebrew Bundler RubyGems
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ matrix.os }}-rubygems-
+
+      - name: Set up git
         run: |
-          VERSION="${{ github.event.inputs.version }}"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update formula to use specified tag
+        run: |
           TAG="${{ github.event.inputs.tag }}"
           
-          # Update version in formula
-          sed -i '' "s|url \".*\"|url \"https://github.com/${{ env.SOURCE_REPO }}/archive/refs/tags/${TAG}.tar.gz\"|" shore.rb
+          # Update URL to point to the specified tag
+          sed -i '' "s|url \".*\"|url \"https://github.com/MoonKraken/shore/archive/refs/tags/${TAG}.tar.gz\"|" ${{ github.event.inputs.formula }}.rb
           
-          # Download the tarball and calculate sha256
-          curl -L -o /tmp/shore.tar.gz "https://github.com/${{ env.SOURCE_REPO }}/archive/refs/tags/${TAG}.tar.gz"
-          SHA256=$(shasum -a 256 /tmp/shore.tar.gz | awk '{print $1}')
+          # Download and calculate sha256
+          curl -L -o /tmp/source.tar.gz "https://github.com/MoonKraken/shore/archive/refs/tags/${TAG}.tar.gz"
+          SHA256=$(shasum -a 256 /tmp/source.tar.gz | awk '{print $1}')
           
-          # Update sha256 in formula
-          sed -i '' "s|sha256 \".*\"|sha256 \"${SHA256}\"|" shore.rb
+          # Update sha256
+          sed -i '' "s|sha256 \".*\"|sha256 \"${SHA256}\"|" ${{ github.event.inputs.formula }}.rb
           
-          cat shore.rb
+          echo "Updated formula:"
+          cat ${{ github.event.inputs.formula }}.rb
 
       - name: Clean Homebrew cache
         run: |
-          # Remove stale cached downloads to avoid SHA mismatch errors
           brew cleanup -s
-          rm -rf $(brew --cache)
+          rm -rf "$(brew --cache)"
 
-      - name: Setup tap
+      - name: Build bottle using test-bot
         run: |
-          # Create tap directory structure
-          mkdir -p $(brew --repository)/Library/Taps/moonkraken/homebrew-shore
-          cp shore.rb $(brew --repository)/Library/Taps/moonkraken/homebrew-shore/
+          brew test-bot --only-cleanup-before
+          brew test-bot --only-setup
+          brew test-bot --only-formulae --skip-recursive-dependents --root-url="https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}" --only-json-tab ${{ github.event.inputs.formula }}
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install formula
-        run: |
-          brew install --build-bottle moonkraken/shore/shore
-
-      - name: Build bottle
-        run: |
-          brew bottle --json --root-url=https://github.com/${{ env.SOURCE_REPO }}/releases/download/${{ github.event.inputs.tag }} moonkraken/shore/shore
-
-      - name: Get bottle filename
-        id: bottle-name
-        run: |
-          BOTTLE_FILE=$(ls *.bottle.tar.gz)
-          echo "filename=$BOTTLE_FILE" >> $GITHUB_OUTPUT
-          
-          # Also get the OS-specific name for the release
-          if [[ "${{ matrix.os }}" == "macos-13" ]]; then
-            OS_NAME="ventura"
-          elif [[ "${{ matrix.os }}" == "macos-14" ]]; then
-            OS_NAME="sonoma"
-          elif [[ "${{ matrix.os }}" == "macos-15" ]]; then
-            OS_NAME="sequoia"
-          fi
-          echo "os_name=$OS_NAME" >> $GITHUB_OUTPUT
-
-      - name: Upload bottle artifact
+      - name: Upload bottles as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bottle-${{ steps.bottle-name.outputs.os_name }}
-          path: |
-            *.bottle.tar.gz
-            *.bottle.json
+          name: bottles-${{ matrix.os }}
+          path: '*.bottle.*'
 
-      - name: Upload bottle to source repo release
-        uses: softprops/action-gh-release@v1
-        with:
-          repository: ${{ env.SOURCE_REPO }}
-          tag_name: ${{ github.event.inputs.tag }}
-          files: |
-            *.bottle.tar.gz
-          token: ${{ secrets.SOURCE_REPO_TOKEN }}
-
-  update-formula:
+  upload-bottles:
     needs: build-bottles
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout tap repository
         uses: actions/checkout@v4
 
-      - name: Download all bottle artifacts
+      - name: Download all bottles
         uses: actions/download-artifact@v4
         with:
-          pattern: bottle-*
+          pattern: bottles-*
           merge-multiple: true
 
-      - name: Update formula with bottle checksums
+      - name: Upload bottles to source repo release
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: MoonKraken/shore
+          tag_name: ${{ github.event.inputs.tag }}
+          files: '*.bottle.tar.gz'
+          token: ${{ secrets.SOURCE_REPO_TOKEN }}
+          fail_on_unmatched_files: true
+
+      - name: Update formula with bottle information
         run: |
-          # Extract bottle information from JSON files
-          BOTTLE_BLOCK="  bottle do\n    root_url \"https://github.com/${{ env.SOURCE_REPO }}/releases/download/${{ github.event.inputs.tag }}\"\n"
-          
-          for json_file in *.bottle.json; do
-            if [ -f "$json_file" ]; then
-              # Parse JSON to get OS and sha256
-              OS=$(jq -r 'keys[0] as $formula | .[$formula].bottle.tags | keys[0]' "$json_file")
-              SHA256=$(jq -r 'keys[0] as $formula | .[$formula].bottle.tags['\"$OS\"'].sha256' "$json_file")
-              
-              BOTTLE_BLOCK="${BOTTLE_BLOCK}    sha256 cellar: :any_skip_relocation, ${OS}: \"${SHA256}\"\n"
-            fi
-          done
-          
-          BOTTLE_BLOCK="${BOTTLE_BLOCK}  end\n"
-          
-          # Insert bottle block after the license line
-          awk -v bottle="$BOTTLE_BLOCK" '
-            /license/ {
-              print
-              print ""
-              printf "%b", bottle
-              next
-            }
-            { print }
-          ' shore.rb > shore.rb.tmp
-          
-          mv shore.rb.tmp shore.rb
-          
-          cat shore.rb
+          # Merge bottle JSON files
+          if ls *.bottle.json 1> /dev/null 2>&1; then
+            jq -s 'reduce .[] as $item ({}; . * $item)' *.bottle.json > merged.bottle.json
+            
+            echo "Merged bottle JSON:"
+            cat merged.bottle.json
+            
+            # Extract and format bottle block
+            FORMULA="${{ github.event.inputs.formula }}"
+            
+            # Build bottle block from JSON
+            echo "  bottle do" > bottle_block.txt
+            echo "    root_url \"https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}\"" >> bottle_block.txt
+            
+            jq -r ".\"${FORMULA}\".bottle.tags | to_entries[] | \"    sha256 cellar: :any_skip_relocation, \" + .key + \": \\\"\" + .value.sha256 + \"\\\"\"" merged.bottle.json >> bottle_block.txt
+            
+            echo "  end" >> bottle_block.txt
+            
+            echo "Generated bottle block:"
+            cat bottle_block.txt
+            
+            # Insert bottle block after license line in formula
+            awk '
+              /license/ {
+                print
+                print ""
+                while ((getline line < "bottle_block.txt") > 0) {
+                  print line
+                }
+                next
+              }
+              { print }
+            ' ${FORMULA}.rb > ${FORMULA}.rb.tmp
+            
+            mv ${FORMULA}.rb.tmp ${FORMULA}.rb
+            
+            echo "Updated formula:"
+            cat ${FORMULA}.rb
+          else
+            echo "No bottle JSON files found!"
+            exit 1
+          fi
 
       - name: Commit and push updated formula
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add shore.rb
+          git add ${{ github.event.inputs.formula }}.rb
           git commit -m "Add bottles for ${{ github.event.inputs.tag }}"
           git push
 
