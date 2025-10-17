@@ -101,6 +101,7 @@ jobs:
           pattern: bottles-*
           merge-multiple: true
 
+      # this step is for diagnostic purposes only
       - name: List downloaded files
         run: |
           echo "Files in current directory:"
