@@ -16,7 +16,6 @@ jobs:
     strategy:
       matrix:
         os:
-          - macos-13      # Ventura (Intel)
           - macos-14      # Sonoma (Apple Silicon)
           - macos-15      # Sequoia
     runs-on: ${{ matrix.os }}
@@ -101,6 +100,14 @@ jobs:
         with:
           pattern: bottles-*
           merge-multiple: true
+
+      - name: List downloaded files
+        run: |
+          echo "Files in current directory:"
+          ls -la
+          echo ""
+          echo "All files recursively:"
+          find . -type f -ls
 
       - name: Upload bottles to source repo release
         uses: softprops/action-gh-release@v2
