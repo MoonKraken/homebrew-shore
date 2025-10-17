@@ -2,7 +2,7 @@ class Shore < Formula
   desc "Terminal User Interface for chatting with multiple language models"
   homepage "https://github.com/MoonKraken/shore"
   url "https://github.com/MoonKraken/shore/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "" # This will be filled when you create a release
+  sha256 "" # This on release creation
   license "MIT" # Update with your actual license
   head "https://github.com/MoonKraken/shore.git", branch: "main"
 
@@ -14,8 +14,6 @@ class Shore < Formula
 
   def caveats
     <<~EOS
-      Shore stores databases in ~/.shore/
-      
       To use Shore, you'll need to set API keys for the providers you want to use:
         export OPENAI_API_KEY="your-openai-api-key"
         export ANTHROPIC_API_KEY="your-anthropic-api-key"
@@ -30,4 +28,3 @@ class Shore < Formula
     assert_match(/shore/i, output)
   end
 end
-
