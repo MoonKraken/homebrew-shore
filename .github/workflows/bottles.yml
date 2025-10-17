@@ -132,7 +132,7 @@ jobs:
             echo "  bottle do" > bottle_block.txt
             echo "    root_url \"https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}\"" >> bottle_block.txt
             
-            jq -r '.shore.bottle.tags | to_entries[] | "    sha256 cellar: :any_skip_relocation, " + .key + ": \"" + .value.sha256 + "\""' merged.bottle.json >> bottle_block.txt
+            jq -r '.[] | .bottle.tags | to_entries[] | "    sha256 cellar: :any_skip_relocation, " + .key + ": \"" + .value.sha256 + "\""' merged.bottle.json >> bottle_block.txt
             
             echo "  end" >> bottle_block.txt
             
