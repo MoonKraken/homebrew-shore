@@ -1,3 +1,7 @@
+# typed: strict
+# frozen_string_literal: true
+
+# The TUI chatbot
 class Shore < Formula
   desc "Terminal User Interface for chatting with multiple language models"
   homepage "https://github.com/MoonKraken/shore"
