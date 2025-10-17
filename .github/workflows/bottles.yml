@@ -115,7 +115,7 @@ jobs:
         with:
           repository: MoonKraken/shore
           tag_name: ${{ github.event.inputs.tag }}
-          files: '*.bottle.tar.gz'
+          files: '*.bottle*.tar.gz'
           token: ${{ secrets.SOURCE_REPO_TOKEN }}
           fail_on_unmatched_files: true
 
