@@ -131,6 +131,7 @@ jobs:
             # Build bottle block from JSON
             echo "  bottle do" > bottle_block.txt
             echo "    root_url \"https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}\"" >> bottle_block.txt
+            echo "    rebuild 1" >> bottle_block.txt
             
             jq -r '.[] | .bottle.tags | to_entries[] | "    sha256 cellar: :any_skip_relocation, " + .key + ": \"" + .value.sha256 + "\""' merged.bottle.json >> bottle_block.txt
             
