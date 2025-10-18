@@ -109,6 +109,25 @@ jobs:
           echo ""
           echo "All files recursively:"
           find . -type f -ls
+          echo ""
+          echo "Bottle JSON contents:"
+          cat *.bottle.json || echo "No bottle JSON files found"
+
+      - name: Rename bottles to match expected format
+        run: |
+          # Rename bottles from shore--X.Y.Z.platform.bottle.N.tar.gz
+          # to shore-X.Y.Z.platform.bottle.tar.gz (without rebuild suffix)
+          for file in shore--*.bottle.*.tar.gz; do
+            if [ -f "$file" ]; then
+              # Remove the double dash and the rebuild number
+              newname=$(echo "$file" | sed 's/shore--/shore-/' | sed 's/\.bottle\.[0-9]*\.tar\.gz/.bottle.tar.gz/')
+              echo "Renaming: $file -> $newname"
+              mv "$file" "$newname"
+            fi
+          done
+          echo ""
+          echo "Files after renaming:"
+          ls -la *.bottle.tar.gz
 
       - name: Upload bottles to source repo release
         uses: softprops/action-gh-release@v2
@@ -131,7 +150,6 @@ jobs:
             # Build bottle block from JSON
             echo "  bottle do" > bottle_block.txt
             echo "    root_url \"https://github.com/MoonKraken/shore/releases/download/${{ github.event.inputs.tag }}\"" >> bottle_block.txt
-            echo "    rebuild 1" >> bottle_block.txt
             
             jq -r '.[] | .bottle.tags | to_entries[] | "    sha256 cellar: :any_skip_relocation, " + .key + ": \"" + .value.sha256 + "\""' merged.bottle.json >> bottle_block.txt
             
